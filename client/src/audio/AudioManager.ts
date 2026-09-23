@@ -1,3 +1,7 @@
+import deathUrl from '../../../assets/audio/death.mp3?url';
+import dinoSoundUrl from '../../../assets/audio/dino-sound.mp3?url';
+import jumpUrl from '../../../assets/audio/jump.mp3?url';
+import musicUrl from '../../../assets/audio/jungle-background.mp3?url';
 import { logger } from '../util/logger.js';
 
 const SCOPE = 'audio';
@@ -23,8 +27,8 @@ const WALK_GAIN = 0.9;
 /*
  * FOUR SUPPLIED FILES, and everything else synthesised.
  *
- * The asset set for this game ships a jungle background track, a jump, a fall
- * and a dinosaur roar. They are used as they are - a tune, a real impact and a
+ * The asset set for this game ships a jungle background track, a jump, a death
+ * and a dinosaur sound. They are used as they are - a tune, a real impact and a
  * living roar are what an oscillator cannot fake - and the roar is also pitched
  * and cut to voice every bite, bellow and death cry, from a Compsognathus's
  * chirp to an Indominus's roar. Everything else below is still built from
@@ -38,37 +42,32 @@ const WALK_GAIN = 0.9;
  * It still routes through `musicBus`, which is what keeps the portal's
  * `music_volume`, the master volume and mute all working on it untouched.
  *
- * Check `npm run size:client` after changing any of the three.
+ * Check `npm run size:client` after changing any of the four.
+ *
+ * THEY ARE IMPORTED, NOT FETCHED BY PATH. Vite emits each under a
+ * content-hashed name in `assets/`, so a replaced sound gets a new URL (never
+ * a stale cached copy) and a missing one fails the build instead of going
+ * quietly silent. Their names carry no spaces: the game host answers a
+ * percent-encoded space with 400 Bad Request, which is how the music and the
+ * bite once vanished from production while working locally.
  */
 
-/** The supplied background track. Streamed, never decoded. */
-const MUSIC_URL = '/audio/jungle%20background.mp3';
+/** The supplied background track (`assets/audio/jungle-background.mp3`). Streamed, never decoded. */
+const MUSIC_URL = musicUrl;
 
-/**
- * The supplied one-shots, by the sound they stand in for.
- *
- * `fall.mp3` is the DEATH, which is what falling is in this game: every death
- * on this course is arriving somewhere the course did not want you.
- *
- * `robot steps.mp3` is the FOOTFALL, and it is the sound the player hears more
- * than any other - one per stride, for as long as they are walking. The URL is
- * percent-encoded because the supplied file has a space in its name and the
- * supplied files are never renamed; `encodeURI` would be wrong here, since it
- * leaves an existing `%` alone and this path is written out once.
- */
+/** The supplied one-shots, by the sound they stand in for. */
 const SAMPLE_URLS: Partial<Record<SoundName, string>> = {
-  // The supplied death: the dinosaur going down under its rider.
-  death: '/audio/death.mp3',
-  // The supplied jump.
-  jump: '/audio/jump.mp3',
-  // The supplied dinosaur sound (a space in the supplied name, percent-encoded).
-  // Pitched per species: a Compsognathus shrieks with it, a Tyrannosaurus bellows.
-  // Its first short burst is also every BITE (see BITE_SLICE).
-  roar: '/audio/dino%20sound.mp3',
+  // The dinosaur going down under its rider.
+  death: deathUrl,
+  jump: jumpUrl,
+  // The supplied dinosaur sound (`assets/audio/dino-sound.mp3`). Pitched per species:
+  // a Compsognathus shrieks with it, a Tyrannosaurus bellows. Its first short burst
+  // is also EVERY BITE, the rider's and the wild dinosaurs' (see BITE_SLICE).
+  roar: dinoSoundUrl,
 };
 
 /**
- * THE BITE: the opening burst of `dino sound.mp3` (it starts at ~0.1s and is
+ * THE BITE: the opening burst of `dino-sound.mp3` (it starts at ~0.1s and is
  * done by ~0.5s; a second burst follows after a gap). Played from just before
  * its onset so the crunch lands on the impact frame, faded out after the burst.
  */

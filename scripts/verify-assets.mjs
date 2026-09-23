@@ -33,10 +33,10 @@ const EXPECTED = [
   { path: 'assets/ui/shoe.png', md5: 'c5305c2301b18df2d2b4f5f57ccf5fb7' },
   // The sounds: the jungle music, the rider's fall, the jump, and the dinosaur roar
   // (which every bite, bellow and roar in the game is shaped from).
-  { path: 'assets/audio/jungle background.mp3', md5: 'ef2ed949c4370df6f8609bc9d2cc3ea3' },
+  { path: 'assets/audio/jungle-background.mp3', md5: 'ef2ed949c4370df6f8609bc9d2cc3ea3' },
   { path: 'assets/audio/death.mp3', md5: 'a6c361490b027a8effd0ac861936a5a7' },
   { path: 'assets/audio/jump.mp3', md5: '77c58db6921be7b0c7a61903d38bbf30' },
-  { path: 'assets/audio/dino sound.mp3', md5: 'ce4ef208f92e8c1cdf7646bc2ce50f10' },
+  { path: 'assets/audio/dino-sound.mp3', md5: 'ce4ef208f92e8c1cdf7646bc2ce50f10' },
 ];
 
 let failures = 0;

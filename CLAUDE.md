@@ -29,6 +29,9 @@ strings (`node -e "..."`): write a .cjs file to the scratchpad and run it.
 - Ports: server **2590**, Vite **5190**, preview 4190. Room `dinoevolution`, Bloxity slug
   `dino-evolution`, 15 per room.
 - **Client build under 12 MB** (currently ~4.4 MB). Only `assets/` ships as files; `verify-assets` pins digests.
+- **Shipped file names: letters, digits, `. _ -` only** (the build fails otherwise). The Bloxity host answers a
+  `%20` with 400: spaced audio names once silently killed the music and the bite in production. Audio is imported
+  by `AudioManager` (`?url`) so it ships content-hashed from `dist/assets/`; `dist/audio/` is pruned.
 - **Art style: a polished ROBLOX game** (the user's reference screenshots are the target). Everything is block-built,
   flat-coloured "plastic", no realistic textures:
   - Dinosaurs: species spec (`client/src/dinos/DinoSpecies.ts`) -> real skeleton -> `DinoBlocks.ts` builds RIGID
