@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dino Lab</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #9cc8e8; font-family: system-ui, sans-serif; }
+      #ui { position: fixed; top: 8px; left: 8px; z-index: 2; background: rgba(20, 24, 30, 0.8); color: #fff; padding: 8px; border-radius: 8px; font-size: 13px; display: flex; gap: 6px; flex-wrap: wrap; max-width: 96vw; }
+      #ui select, #ui button { font-size: 13px; }
+      #info { position: fixed; bottom: 8px; left: 8px; color: #fff; background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 6px; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div id="ui"></div>
+    <div id="info"></div>
+    <script type="module" src="/src/dev/DinoLab.ts"></script>
+  </body>
+</html>

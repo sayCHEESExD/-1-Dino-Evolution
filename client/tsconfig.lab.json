@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/dinos/**/*.ts", "src/dev/**/*.ts", "src/config/device.ts"]
+}
