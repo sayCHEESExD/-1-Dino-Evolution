@@ -341,50 +341,6 @@ export const boulders = (b: PartBuilder, r: Rand, x: number, y: number, z: numbe
   for (let i = 0; i < 3; i += 1) rock(b, r, x + (r() - 0.5) * s * 3.2, y, z + (r() - 0.5) * s * 3.2, s * (0.25 + r() * 0.2), shade(color, 0.92));
 };
 
-/**
- * A CLIFF, the Roblox way: a wall of big stepped blocks filling the box, each
- * block a slightly different height, capped with a slab of grass turf that
- * laps over its edges - the dirt-and-grass terraces of the reference maps.
-* With no cap it is a bare stone wall of stacked blocks. Every block is
- * exactly `height` tall, so anything placed on top (at the returned height)
- * stands flush on the turf.
- */
-export const cliff = (
-  b: PartBuilder,
-  r: Rand,
-  minX: number,
-  maxX: number,
-  minZ: number,
-  maxZ: number,
-  height: number,
-  color: number,
-  cap: number | null = 0x4fc23a,
-): number => {
-  const w = maxX - minX;
-  const d = maxZ - minZ;
-  const along = w >= d;
-  const length = along ? w : d;
-  const thickness = along ? d : w;
-  const blocks = Math.max(1, Math.round(length / Math.max(6, Math.min(14, height * 0.8))));
-  const step = length / blocks;
-  const cx = (minX + maxX) / 2;
-  const cz = (minZ + maxZ) / 2;
-  const turf = cap ?? 0;
-  for (let i = 0; i < blocks; i += 1) {
-    const c = (along ? minX : minZ) + step * (i + 0.5);
-    const h = height;
-    const x = along ? c : cx;
-    const z = along ? cz : c;
-    const sx = along ? step + 0.02 : thickness;
-    const sz = along ? thickness : step + 0.02;
-    b.add(box(sx, h, sz), shade(color, 0.92 + r() * 0.14), 'flat', { x, y: h / 2, z });
-    // A darker band of strata a third of the way up.
-    b.add(box(sx + 0.06, h * 0.12, sz + 0.06), shade(color, 0.8), 'flat', { x, y: h * (0.3 + r() * 0.2), z });
-    if (cap !== null) b.add(box(sx + 0.5, 1.1, sz + 0.5), shade(turf, 0.95 + r() * 0.1), 'flat', { x, y: h + 0.35, z });
-  }
-  return cap === null ? height : height + 0.9;
-};
-
 /** A flat-topped mesa of layered blocks, for canyons and badlands. */
 export const mesa = (b: PartBuilder, r: Rand, x: number, y: number, z: number, s = 1, colors: readonly number[] = [0xd8763a, 0xe8945a, 0xc0602e]): void => {
   const layers = 4;
@@ -450,39 +406,6 @@ export const flowers = (b: PartBuilder, r: Rand, x: number, y: number, z: number
     b.add(box(s * 0.22, s * 0.08, s * 0.62), bloom, 'flat', { x: px, y: y + h, z: pz, ry });
     b.add(box(s * 0.2, s * 0.1, s * 0.2), 0xffd23a, 'flat', { x: px, y: y + h + 0.04, z: pz, ry });
   }
-};
-
-/**
- * A jungle vine: a thick green stalk rising in an arc out of the ground and
- * bending over, banded with darker diamonds - the reference's curling vine.
- */
-export const jungleVine = (b: PartBuilder, r: Rand, x: number, y: number, z: number, s = 1, ry = 0): void => {
-  const segs = 7;
-  const thick = s * 0.55;
-  const fx = Math.sin(ry);
-  const fz = Math.cos(ry);
-  let px = x;
-  let py = y;
-  let pz = z;
-  for (let i = 0; i < segs; i += 1) {
-    const t = (i + 0.5) / segs;
-    // Up steeply, then over: the angle swings from vertical to past horizontal.
-    const angle = Math.PI / 2 - t * Math.PI * 0.75;
-    const len = s * 0.9;
-    const dy = Math.sin(angle) * len;
-    const dh = Math.cos(angle) * len;
-    const cx = px + fx * dh * 0.5;
-    const cy = py + dy * 0.5;
-    const cz = pz + fz * dh * 0.5;
-    const pitch = Math.PI / 2 - angle;
-    b.add(box(thick, len * 1.1, thick), shade(0x3cbc3a, i % 2 ? 1 : 0.9), 'flat', { x: cx, y: cy, z: cz, ry, rx: pitch });
-    b.add(box(thick * 1.04, len * 0.3, thick * 1.04), 0x2a8a2a, 'flat', { x: cx, y: cy, z: cz, ry: ry + Math.PI / 4, rx: pitch });
-    px += fx * dh;
-    py += dy;
-    pz += fz * dh;
-  }
-  // A leaf at its tip.
-  b.add(box(s * 0.9, s * 0.1, s * 0.5), 0x5ee048, 'flat', { x: px, y: py, z: pz, ry });
 };
 
 /** An arching root or branch: brown blocks along a half-arch from the ground, as in the reference. */

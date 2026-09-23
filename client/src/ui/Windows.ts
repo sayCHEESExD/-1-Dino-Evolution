@@ -270,7 +270,7 @@ export class InventoryWindow extends Window {
     const ridden = DINOS[s.dinoSlot - 1];
     if (ridden) {
       this.body.append(
-        el('div', 'dn-detail dn-outline', `Riding <span style="color:${ridden.color}">${ridden.name}</span> - +${formatAmount(ridden.damage)} Damage per attack<small>Evolve here or on the paddock pads to the left of the park gate.</small>`),
+        el('div', 'dn-detail dn-outline', `Riding <span style="color:${ridden.color}">${ridden.name}</span> - +${formatAmount(ridden.damage)} Damage per attack<small>Evolve here or on the paddock pads to the left of the spawn.</small>`),
       );
     }
   }

@@ -88,6 +88,23 @@ const shortcutOf = (event: KeyboardEvent): string => {
   return (event.key || '').toLowerCase();
 };
 
+/** Auto Bite is remembered per browser (a convenience; nothing is lost if storage is blocked). */
+const AUTO_BITE_KEY = 'dino-evolution:auto-bite';
+const loadAutoBite = (): boolean => {
+  try {
+    return window.localStorage.getItem(AUTO_BITE_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+const saveAutoBite = (on: boolean): void => {
+  try {
+    window.localStorage.setItem(AUTO_BITE_KEY, on ? '1' : '0');
+  } catch {
+    /* storage blocked: the toggle still works for this session */
+  }
+};
+
 const isTyping = (target: EventTarget | null): boolean => {
   const element = target as HTMLElement | null;
   if (!element) return false;
@@ -109,7 +126,7 @@ interface PendingImpact {
 }
 
 const PLACES = [
-  { id: 'spawn', name: 'Spawn', detail: 'The park gates' },
+  { id: 'spawn', name: 'Spawn', detail: 'The waterfall camp' },
   { id: 'dinos', name: 'Dino Paddock', detail: 'Evolve your dinosaur' },
   { id: 'training', name: 'Training', detail: 'Attack the dummies' },
   { id: 'eggs', name: 'Hatchery', detail: 'Hatch pets' },
@@ -149,6 +166,9 @@ export class Game {
   private readonly dinosTile: Tile;
   private readonly itemsTile: Tile;
   private readonly teleportTile: Tile;
+  private readonly biteTile: Tile;
+  /** AUTO BITE: bite whenever a wild enemy is in reach (the server's rate limit and checks still apply). */
+  private autoBite = loadAutoBite();
   private readonly musicTile: Tile;
   private readonly corner: HTMLDivElement;
   private readonly audio = new AudioManager();
@@ -216,6 +236,12 @@ export class Game {
     this.dinosTile = new Tile(rail, 'dinos', 'Dinos', ICON.dinos, 'C', () => this.openOnly('dinos'));
     this.itemsTile = new Tile(rail, 'items', 'Items', ICON.backpack, 'I', () => this.openOnly('items'));
     this.teleportTile = new Tile(rail, 'teleport', 'Teleport', ICON.teleport, 'T', () => this.openOnly('teleport'));
+    this.biteTile = new Tile(rail, 'bite', 'Auto Bite', ICON.bite, 'Q', () => {
+      this.autoBite = !this.autoBite;
+      this.biteTile.setOn(this.autoBite);
+      saveAutoBite(this.autoBite);
+    });
+    this.biteTile.setOn(this.autoBite);
     this.corner = document.createElement('div');
     this.corner.className = 'dn-corner';
     container.appendChild(this.corner);
@@ -313,6 +339,9 @@ export class Game {
         break;
       case 't':
         this.teleportTile.press();
+        break;
+      case 'q':
+        this.biteTile.press();
         break;
       case 'm':
         this.musicTile.press();
@@ -423,7 +452,7 @@ export class Game {
       this.sceneManager.followShadow(player.position.x, player.position.y, player.position.z);
       this.flushInput();
       if (!dead) {
-        this.updateAttacks(delta, input.attack || input.attackHeld, player);
+        this.updateAttacks(delta, input.attack || input.attackHeld, this.autoBite, player);
         this.updatePads(delta, player);
       }
       this.playerAudio.update(delta, {
@@ -468,7 +497,7 @@ export class Game {
     this.lastBiome = key;
     const { biome } = Atmosphere.biomeAt(this.localPlayer?.position.z ?? SPAWN.z);
     this.particles.setBiome(biome.particles);
-    this.impacts.setGround(parseInt(biome.ground.light.replace('#', ''), 16));
+    this.impacts.setGround(biome.look.floor[1]);
   }
 
   // -------------------------------------------------------------- attacks
@@ -486,22 +515,26 @@ export class Game {
 
   /**
    * ATTACKING. A click (or the ATTACK button) attacks; standing at a dummy
-   * attacks it automatically. The attack plays at once for feel; the server
+   * attacks it automatically; AUTO BITE bites only when a wild dinosaur is in
+   * reach (never the air). The attack plays at once for feel; the server
    * rate-limits it, validates the reach and target, and pays the Damage.
    */
-  private updateAttacks(delta: number, wanted: boolean, player: LocalPlayer): void {
+  private updateAttacks(delta: number, wanted: boolean, autoBite: boolean, player: LocalPlayer): void {
     this.sinceAttack += delta;
     const state = this.local;
     if (!state) return;
     const tier = this.dummyUnderfoot(player);
     const auto = tier >= 0 && canTrainOn(tier, state.rebirths) && state.health > 0;
-    if (!wanted && !auto) return;
+    const biting = autoBite && state.health > 0;
+    if (!wanted && !auto && !biting) return;
     if (this.sinceAttack < COMBAT.attackInterval || anyWindowOpen()) return;
-    this.sinceAttack = 0;
 
     const dino = riddenDino(state.dinoSlot, state.ownedDinos);
     const p = player.position;
     const target = auto ? dummyTarget(tier) : this.targets.aim(p.x, p.z, player.yaw, dino.reach, this.network.enemies, state);
+    // Auto Bite on its own waits for a wild enemy in reach.
+    if (!wanted && !auto && (target === NO_TARGET || isDummyTarget(target))) return;
+    this.sinceAttack = 0;
 
     const point = this.targetPoint(target, new Vector3());
     const yaw = point ? Math.atan2(point.x - p.x, point.z - p.z) : null;
@@ -806,7 +839,7 @@ export class Game {
     const dead = state.health <= 0;
     if (dead && !player.character.dead) {
       this.audio.play('death');
-      this.hud.defeated(`Respawning at the park...`);
+      this.hud.defeated(`Respawning at camp...`);
     }
     player.character.setDead(dead);
     if (!dead && this.lastHealth > 0 && state.health < this.lastHealth - 0.01) {

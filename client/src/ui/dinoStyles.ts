@@ -101,6 +101,9 @@ body.aoe-touch-mode .dn-tile__key { display: none; }
 .dn-tile--teleport { --a: #4ad8d0; --b: #1a8a9a; }
 .dn-tile--music { --a: #7ad84a; --b: #2f8a24; }
 .dn-tile--off { filter: saturate(0.25) brightness(0.75); }
+.dn-tile--bite { --a: #ff9a4a; --b: #c0421a; }
+.dn-tile--bite.dn-tile--on { animation: dn-bite-on 0.9s ease-in-out infinite; }
+@keyframes dn-bite-on { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 210, 58, 0.9); } 50% { box-shadow: 0 0 0 calc(5 * var(--u)) rgba(255, 210, 58, 0); } }
 @keyframes dn-pip { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
 
 /* ---- Music toggle, top right under the account chip ---- */

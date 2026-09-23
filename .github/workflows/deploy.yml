@@ -136,6 +136,29 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Legion pulls ANONYMOUSLY and does not retry a failed pull. A package's
+      # first push to GHCR is private, so without this check the very first
+      # deploy is accepted (2xx) and then silently never starts - the backend
+      # just answers 503 "not deployed". Fail loudly here instead.
+      - name: Check Legion can pull the image
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          CHANNEL: ${{ needs.channel.outputs.name }}
+        run: |
+          set -euo pipefail
+          REPO="${IMAGE_NAME#ghcr.io/}"
+          TAG="${CHANNEL}-${GITHUB_SHA}"
+          ANON=$(curl -s "https://ghcr.io/token?scope=repository:${REPO}:pull&service=ghcr.io" | jq -r '.token // empty')
+          HTTP=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${ANON}" \
+            -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+            "https://ghcr.io/v2/${REPO}/manifests/${TAG}")
+          if [ "$HTTP" != "200" ]; then
+            echo "::error::${IMAGE_NAME}:${TAG} is not publicly pullable (HTTP $HTTP), so Bloxity could not start it. Make the package public (GitHub -> your profile -> Packages -> $(basename "$REPO") -> Package settings -> Change visibility -> Public), then re-run this workflow."
+            exit 1
+          fi
+          echo "Anonymous pull OK: ${IMAGE_NAME}:${TAG}"
+
       - name: Roll the server on Legion
         env:
           TOKEN: ${{ secrets.LEGION_DEPLOY_TOKEN }}

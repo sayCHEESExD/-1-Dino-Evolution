@@ -15,6 +15,11 @@ export interface CameraConfig {
   readonly followLerp: number;
   /** Vertical field of view in degrees at rest. */
   readonly fov: number;
+  /**
+   * Near clip plane. Depth precision falls off with the square of distance over
+   * this, so it is kept as far out as the camera allows: 0.3 keeps two surfaces
+   * a twentieth of a unit apart distinct past 400 units, where 0.1 let them fight.
+   */
   readonly near: number;
   readonly far: number;
   /** Extra distance at full speed. */
@@ -49,7 +54,7 @@ export const CAMERA: CameraConfig = {
   lookAtHeight: 3.2,
   followLerp: 10,
   fov: 62,
-  near: 0.1,
+  near: 0.3,
   far: 2400,
   speedDistance: 3.5,
   speedFov: 8,

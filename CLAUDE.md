@@ -35,10 +35,18 @@ strings (`node -e "..."`): write a .cjs file to the scratchpad and run it.
     BOXES welded one-per-bone (tapered body/neck/tail blocks, box skull/snout/jaw, pyramid teeth/claws/horns, slab
     sails/frills), flat per-face colour (back on top, flank on sides, belly under) and markings as decal blocks. One
     `SkinnedMesh` per animal, `flatShading` SmoothPlastic material; animated by `DinoAnimator.ts`.
-  - World: `render/Studs.ts` draws Roblox studs in the shader from world position on every studded material
-    (`PartBuilder` kinds, floors). `world/Nature.ts` / `ParkProps.ts` build trees, rocks, cliffs, props from blocks
-    (layered-slab conifers, cube canopies, plank fronds, dirt terraces with grass caps). Hub palette constants live
-    at the top of `HubWorld.ts`; arenas get `vivid()` biome colours, pale studded walls and dirt terraces.
+  - World: a PREHISTORIC JUNGLE ADVENTURE, never a theme park (no park gates, fences, huts, jeeps, crates, warning
+    signs, museum displays - the user asked for all of it gone). `render/Studs.ts` draws Roblox studs in the shader
+    from world position on every studded material. `world/Nature.ts` (trees, ferns, rocks), `Wild.ts` (giant
+    leaves, bromeliads, reeds, lily pads, fallen trees, rock formations, basalt, ice, ruins, waterfalls and
+    `terrainWall`: bank / shelf / cliff tiers with turf lips and vines) and `Relics.ts` (bones, nests, logs, pole
+    torches) build everything from blocks. Each biome's palette and family live in `Biomes.ts` (`Look`);
+    `Habitats.ts` paints each arena's ground and dresses it by family (meadow, jungle, river, swamp, rocky,
+    volcanic, frozen, forest, ruins, beach). Hub palette = `BIOMES.park.look`.
+  - NO Z-FIGHTING, by construction: every ground is ONE painted surface (`Terrain.ts`, tiles two studs wide);
+    liquids are cut into it (surface below the rim, banks down the sides), never laid on top. No decals, no overlay
+    planes. Any block layered on another keeps its faces a clear step apart (caps overhang, bands stand proud, strata
+    inset; wall tiers run different lengths); flat glows/mats sit >= 0.05 above what they cover. Camera near = 0.3.
   - Light: `Atmosphere.robloxAir` normalises every biome's air to clear, bright Roblox daylight (tint kept).
 - **Damage is the progress stat and ATTACKING is the only way to earn it** (in the air, on a dummy, on a wild
   dinosaur). Walking pays nothing. Damage per attack = ridden dino x (rebirths + 1) x pets x items (x dummy),
@@ -72,14 +80,17 @@ strings (`node -e "..."`): write a .cjs file to the scratchpad and run it.
 - COMPACT by design (the user asked for it): park x -70..84, z -36..46; arenas 52 wide (halfWidth 26) x 72 long.
   Changing sizes means editing `shared/src/config/map.ts` (+ enemy POSTS in `stages.ts`), then `npm run verify:layout`
   and the test scripts that place players (they use arena-relative positions).
-- Spawn (0, 0, -12) on a gold spawn plate in the OPEN lobby (no courtyard/cave), facing +Z. Behind it the park gate
-  sits shut in the front wall (z -36). Player's LEFT is +X: the two-storey Dino Paddock (7 pads ground x 22..46, 6 upper
+- Spawn (0, 0, -12) on a gold spawn plate in the OPEN lobby (no courtyard/cave), facing +Z. Behind it a waterfall
+  pours off the front cliff (z -36) into a pond, fossil rocks either side. Player's LEFT is +X: the two-storey Dino Paddock (7 pads ground x 22..46, 6 upper
   x 46..80). RIGHT (-X): Training Grounds (x -62..-20) and the Hatchery behind them (z 24..44; eggs stay put). The whole
-  BACK is the LEADERBOARD WALL (z 46): Top Rebirths / Top Damage / Top Playtime side by side, wall-mounted, with the
-  archway to Stage 1 (HUB_GATE, 11 high) under the middle board. Arena 1 starts z=50; each arena 72 long + 8 gate.
+  BACK is the LEADERBOARD CLIFF (z 46): Top Rebirths / Top Damage / Top Playtime side by side, mounted on banded rock,
+  with the bone-tusk archway to Stage 1 (HUB_GATE, 11 high) under the middle board. Arena 1 starts z=50; each arena 72 long + 8 gate.
 - Locked dinosaurs are shown in full colour (plate + label say LOCKED); never black them out.
-- Only Stage 1 has timber doors; later gates are a red forcefield. Flat ground dressing goes through
-  `world/Decals.ts` (flush, polygon-offset); anything on a wall/terrace/outcrop stands at the height `cliff()` returns.
+- Every gate is a rock arch. Only Stage 1 has (log) doors; later arches are sealed by a thorn-vine curtain that rolls
+  up when the wave is down; crystal lamps in the lintel go red -> green. Reward pads stand under a stone henge.
+- Anything on a wall tier / formation / floor stands at the height its builder returns (`Ledge.y`, `Top.y`).
+  Walk-through dressing only inside arenas (enemies ignore solids and stay on y = 0); arena floors stay flat.
+- Arena bodies (terrain, walls, arch, features) build within 420 of the rider, dressing within 260, one per frame.
 
 ## Progress and identity
 

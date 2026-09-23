@@ -120,6 +120,32 @@ export class PartBuilder {
     return this;
   }
 
+  /**
+   * Add a geometry that is already coloured per vertex (painted terrain):
+   * its own colours are kept, given the same plastic lift as every part.
+   */
+  addPainted(geometry: BufferGeometry, kind: PartKind = 'stud'): this {
+    const g = geometry.index ? geometry.toNonIndexed() : geometry;
+    if (g !== geometry) geometry.dispose();
+    const color = g.getAttribute('color') as BufferAttribute | undefined;
+    if (!color || g.getAttribute('position').count === 0) {
+      g.dispose();
+      return this;
+    }
+    for (const name of Object.keys(g.attributes)) {
+      if (name !== 'position' && name !== 'normal' && name !== 'uv' && name !== 'color') g.deleteAttribute(name);
+    }
+    if (!g.getAttribute('uv')) g.setAttribute('uv', new BufferAttribute(new Float32Array(g.getAttribute('position').count * 2), 2));
+    for (let i = 0; i < color.count; i += 1) {
+      COLOR.setRGB(color.getX(i), color.getY(i), color.getZ(i));
+      COLOR.getHSL(HSL);
+      COLOR.setHSL(HSL.h, Math.min(1, HSL.s * 1.15), Math.min(0.95, HSL.l * 1.03));
+      color.setXYZ(i, COLOR.r, COLOR.g, COLOR.b);
+    }
+    this.parts[kind].push(g);
+    return this;
+  }
+
   /** A box by size and centre. Studded boxes get world-scaled UVs, so studs are the same size everywhere. */
   box(w: number, h: number, d: number, color: number | string, kind: PartKind = 'stud', transform: Transform = {}): this {
     const geometry = kind === 'stud' ? studBox(w, h, d) : new BoxGeometry(w, h, d);

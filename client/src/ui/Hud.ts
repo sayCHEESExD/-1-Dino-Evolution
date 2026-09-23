@@ -42,6 +42,14 @@ export class Tile {
     this.root.classList.toggle('dn-tile--off', off);
   }
 
+  /** A toggle's state: lit and pulsing with a little ON tag when on, dimmed when off. */
+  setOn(on: boolean): void {
+    this.root.classList.toggle('dn-tile--on', on);
+    this.root.setAttribute('aria-pressed', on ? 'true' : 'false');
+    this.setOff(!on);
+    this.setPercent(on ? 'ON' : '');
+  }
+
   press(): void {
     this.root.click();
   }

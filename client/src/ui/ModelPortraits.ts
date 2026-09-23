@@ -1,13 +1,16 @@
 import { dinoBySlot, petById } from '@dino/shared';
 import {
   AmbientLight,
+  Box3,
   Color,
   DirectionalLight,
   Group,
   HemisphereLight,
+  type Object3D,
   PerspectiveCamera,
   Scene,
   SRGBColorSpace,
+  Vector3,
   WebGLRenderTarget,
   type WebGLRenderer,
 } from 'three';
@@ -65,16 +68,9 @@ export class ModelPortraits {
       const animator = new DinoAnimator(dino);
       const motion = createMotion();
       for (let i = 0; i < 6; i += 1) animator.update(0.05, motion);
-      dino.root.rotation.y = -0.85;
       this.holder.add(dino.root);
-      const length = Math.max(0.6, dino.asset.length);
-      const height = Math.max(0.5, dino.asset.height);
-      const span = Math.max(length * 0.78, height * 1.25);
-      const distance = span / (2 * Math.tan((this.camera.fov * Math.PI) / 360)) * 1.08;
-      this.camera.position.set(distance * 0.18, height * 0.62 + distance * 0.12, distance);
-      this.camera.lookAt(0, height * 0.45, 0);
-      this.camera.aspect = 1;
-      this.camera.updateProjectionMatrix();
+      // Turned three-quarters toward the viewer: the head and body read, the tail trails away.
+      this.frame(dino.root, -0.5);
 
       const previousTarget = this.renderer.getRenderTarget();
       const previousColor = new Color();
@@ -107,6 +103,60 @@ export class ModelPortraits {
     }
     this.cache.set(lookId, url);
     return url;
+  }
+
+  /**
+   * Fit the camera to the POSED model's real bounds - snout, tail, crest and
+   * all - from a three-quarter view a little above. The model's corners are
+   * projected and the view is re-centred and pulled in or out until the whole
+   * animal fills the frame with a margin, whatever its proportions or offset.
+   */
+  private frame(root: Object3D, yaw: number): void {
+    // Measured square-on (a turned animal's world box is far bigger than the animal), then turned.
+    root.rotation.y = 0;
+    root.updateMatrixWorld(true);
+    const box = new Box3().setFromObject(root, true);
+    if (box.isEmpty()) box.set(new Vector3(-1, 0, -1), new Vector3(1, 1.5, 1));
+    root.rotation.y = yaw;
+    root.updateMatrixWorld(true);
+    const axis = new Vector3(0, 1, 0);
+    const corners: Vector3[] = [];
+    for (let i = 0; i < 8; i += 1) corners.push(new Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).applyAxisAngle(axis, yaw));
+    const centre = box.getCenter(new Vector3()).applyAxisAngle(axis, yaw);
+    const radius = Math.max(0.3, box.getSize(new Vector3()).length() / 2);
+    const view = new Vector3(0.18, 0.28, 1).normalize();
+    const halfFov = (this.camera.fov * Math.PI) / 360;
+    let distance = radius / Math.sin(halfFov);
+    const look = centre.clone();
+    this.camera.aspect = 1;
+    this.camera.updateProjectionMatrix();
+    const p = new Vector3();
+    for (let pass = 0; pass < 4; pass += 1) {
+      this.camera.position.copy(look).addScaledVector(view, distance);
+      this.camera.lookAt(look);
+      this.camera.updateMatrixWorld(true);
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      for (const corner of corners) {
+        p.copy(corner).project(this.camera);
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y);
+        maxY = Math.max(maxY, p.y);
+      }
+      // Re-centre on the projected bounds, then scale so the larger side spans 92% of the frame.
+      const right = new Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+      const up = new Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
+      const reach = distance * Math.tan(halfFov);
+      look.addScaledVector(right, ((minX + maxX) / 2) * reach).addScaledVector(up, ((minY + maxY) / 2) * reach);
+      const extent = Math.max(maxX - minX, maxY - minY) / 2;
+      distance *= extent / 0.92;
+    }
+    this.camera.position.copy(look).addScaledVector(view, distance);
+    this.camera.lookAt(look);
+    this.camera.updateMatrixWorld(true);
   }
 
   dispose(): void {

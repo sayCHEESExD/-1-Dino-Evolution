@@ -45,7 +45,8 @@ export class WinPlatformFx {
     }
     const ripple = new Mesh(this.ripple, this.rippleMaterial);
     ripple.rotation.x = -Math.PI / 2;
-    ripple.position.y = 0.25;
+    // Clear of the pad slab (top 0.41) and its disc (top 0.51).
+    ripple.position.y = 0.58;
     group.add(column, sparks, ripple);
     this.rigs.push({ group, sparks, ripple });
     return group;

@@ -11,8 +11,8 @@ import { TRAINING_TIERS } from './training.js';
  * Axes: +Z runs from the park entrance toward the wild stages. The spawn faces
  * +Z, so the camera's RIGHT is world -X and its LEFT is world +X:
  *
- *   - the SPAWN is in the open lobby, in front of the closed PARK GATE set into
- *     the front wall (-Z);
+ *   - the SPAWN is in the open lobby, a waterfall and its pond behind it at the
+ *     foot of the front cliff (-Z);
  *   - the EVOLUTION PADDOCK, two storeys of dinosaurs, is on the LEFT (+X);
  *   - the TRAINING GROUNDS are on the RIGHT (-X), the HATCHERY behind them;
  *   - the whole BACK WALL (+Z) is the LEADERBOARD WALL: three great boards side
@@ -32,32 +32,10 @@ export interface Placement {
 const aabb = (minX: number, maxX: number, minY: number, maxY: number, minZ: number, maxZ: number): Aabb => ({ minX, maxX, minY, maxY, minZ, maxZ });
 
 /**
- * The park: the walkable rectangle inside the outer walls, courtyard included.
+ * The valley: the walkable rectangle inside the cliffs.
  * Compact on purpose: every area is a short ride from the spawn.
  */
 export const HUB = { minX: -70, maxX: 84, minZ: -36, maxZ: 46 } as const;
-
-// ---------------------------------------------------------------- Entrance
-
-/**
- * THE PARK GATE: the park's grand entrance, set into the FRONT wall behind the
- * spawn with its doors shut - two timber towers either side of a 20-unit
- * doorway, a crossbeam carrying the park's name. Its towers and doors stand
- * against the wall face (z minZ..maxZ), solid.
- */
-export const ENTRANCE = {
-  /** From the front wall's face into the lobby. */
-  minZ: HUB.minZ,
-  maxZ: HUB.minZ + 2,
-  /** Half-width of the (shut) doorway. */
-  openHalf: 10,
-  /** Each tower spans |x| openHalf..towerOuter. */
-  towerOuter: 16,
-  towerHeight: 22,
-  /** Crossbeam span, underside and top. */
-  beamBottom: 16,
-  beamTop: 20,
-} as const;
 
 /** The spawn: the middle of the open lobby, facing the leaderboard wall. */
 export const SPAWN: Placement = { x: 0, y: 0, z: -12, yaw: 0 };
@@ -238,8 +216,8 @@ export const EGG_PLACEMENTS: readonly EggPlacement[] = EGGS.map((egg, index) => 
 // ------------------------------------------------------------------ Boards
 
 /**
- * THE LEADERBOARD WALL along the back of the park: Top Rebirths, Top Damage and
- * Top Playtime side by side, mounted high on a stone-and-timber wall facing the
+ * THE LEADERBOARD CLIFF along the back of the valley: Top Rebirths, Top Damage and
+ * Top Playtime side by side, mounted high on a cliff of banded rock facing the
  * spawn (-Z). The middle board crowns the archway out to Stage 1.
  */
 export const BOARDS = {
@@ -281,23 +259,23 @@ export const HUB_TREES: readonly (readonly [number, number, number])[] = [
 export const TREE_HALF = 0.9;
 
 /**
- * DRESSING THAT STANDS IN THE PARK: every piece a player could walk into is a
- * solid, listed once so the client draws exactly what collision holds. All of
- * it is clear of the avenue, the pads, the mats and the nests.
+ * DRESSING THAT STANDS IN THE VALLEY: every piece a player could walk into is
+ * a solid, listed once so the client draws exactly what collision holds. All
+ * of it is clear of the avenue, the pads, the mats and the nests.
  */
 /**
- * The two mounted fossil skeletons just inside the gate, either side of the
- * avenue: plinth and bones, one solid tall enough that nobody walks into the ribs.
+ * The two fossil rocks either side of the pond behind the spawn: stepped rock
+ * with a skull on top and bones set in its face, each one solid.
  */
 export const FOSSIL_DISPLAYS: readonly Aabb[] = [aabb(-19.5, -16.5, 0, 5, -33, -24), aabb(16.5, 19.5, 0, 5, -33, -24)];
 
-/** Supply crates by the training grounds' front corner. */
+/** A stack of cut logs by the training grounds' front corner. */
 export const TRAINING_CRATES: Aabb = aabb(-19, -15, 0, 2.2, -35.6, -33.6);
 
-/** The feed trough inside the training grounds. */
+/** The feed trough inside the training grounds: a hollowed log heaped with fruit. */
 export const FEED_TROUGH: Aabb = aabb(-62, -57, 0.3, 2.5, 13, 19);
 
-/** The waterfall pool's stone rim, at the hatchery's end. */
+/** The rock-rimmed pool at the hatchery's end, fed by a fall down the west cliff. */
 export const HATCHERY_POOL: Aabb = aabb(-69, -63.5, 0, 1.2, 26, 42);
 
 export const HUB_PROP_SOLIDS: readonly Aabb[] = [
@@ -397,15 +375,10 @@ export const buildStaticSolids = (stageCount: number): Aabb[] => {
     boxes.push(aabb(minX, maxX, minY, maxY, minZ, maxZ));
   };
 
-  // The park's outer walls: the front cliffs behind the courtyard, both sides.
+  // The valley.s cliffs: the front one behind the spawn and its falls, both sides.
   box(HUB.minX - 30, HUB.maxX + 30, -2, 40, HUB.minZ - 30, HUB.minZ);
   box(HUB.minX - 30, HUB.minX, -2, 40, HUB.minZ, HUB.maxZ + HUB_BACK_WALL_DEPTH);
   box(HUB.maxX, HUB.maxX + 30, -2, 40, HUB.minZ, HUB.maxZ + HUB_BACK_WALL_DEPTH);
-
-  // The park gate in the front wall: its towers, the shut doors, the crossbeam.
-  box(-ENTRANCE.towerOuter, -ENTRANCE.openHalf, -2, ENTRANCE.towerHeight, ENTRANCE.minZ, ENTRANCE.maxZ);
-  box(ENTRANCE.openHalf, ENTRANCE.towerOuter, -2, ENTRANCE.towerHeight, ENTRANCE.minZ, ENTRANCE.maxZ);
-  box(-ENTRANCE.openHalf, ENTRANCE.openHalf, -2, ENTRANCE.beamTop, ENTRANCE.minZ, ENTRANCE.minZ + 0.8);
 
   // The leaderboard wall across the back, with the archway to Stage 1 beneath the middle board.
   const backZ0 = HUB.maxZ;

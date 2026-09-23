@@ -27,6 +27,11 @@ export const ICON = {
   sound:
     `<svg viewBox="0 0 64 64" aria-hidden="true"><path fill="#fff4dc" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round" d="M8 24h12l14-12v40L20 40H8z"/>` +
     `<path fill="none" stroke="#fff4dc" stroke-width="4.5" stroke-linecap="round" d="M42 22c5 6 5 14 0 20M49 15c9 10 9 24 0 34"/><path fill="none" stroke="${INK}" stroke-width="1.5" stroke-linecap="round" d="M42 22c5 6 5 14 0 20M49 15c9 10 9 24 0 34"/></svg>`,
+  bite:
+    `<svg viewBox="0 0 64 64" aria-hidden="true"><path fill="#e8583a" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round" d="M6 22c10-12 34-14 52-6l-4 10H12z"/>` +
+    `<path fill="#e8583a" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round" d="M8 42c12 12 34 12 50 4l-4-8H12z"/>` +
+    `<path fill="#ffffff" stroke="${INK}" stroke-width="2" stroke-linejoin="round" d="M14 26l4 8 4-8zM24 26l4 9 4-9zM34 26l4 9 4-9zM44 26l4 8 3-8zM16 38l4-8 4 8zM27 38l4-9 4 9zM38 38l4-9 4 9z"/>` +
+    `<circle cx="46" cy="17" r="3" fill="#ffd23a" stroke="${INK}" stroke-width="1.6"/></svg>`,
   egg:
     `<svg viewBox="0 0 64 64" aria-hidden="true"><path fill="#f3ecd8" stroke="${INK}" stroke-width="3.5" d="M32 5c11 0 20 18 20 32 0 12-9 22-20 22S12 49 12 37C12 23 21 5 32 5z"/>` +
     `<circle cx="25" cy="26" r="3" fill="#8fa86a"/><circle cx="38" cy="36" r="4" fill="#8fa86a"/><circle cx="29" cy="46" r="2.5" fill="#8fa86a"/><circle cx="40" cy="20" r="2" fill="#8fa86a"/></svg>`,

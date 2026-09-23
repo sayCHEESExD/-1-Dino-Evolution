@@ -138,7 +138,7 @@ const T = 1_000_000_000_000;
 
 const PLANS: readonly StagePlan[] = [
   { name: 'Fern Meadow', theme: 'meadow', damage: 10, reward: 1, wave: [['Compsognathus', 'compy-wild', 3, 0.8]] },
-  { name: 'Raptor Paddock', theme: 'grassland', damage: 40, reward: 5, wave: [['Raptor', 'raptor-wild', 3, 0.95]] },
+  { name: 'Raptor Thicket', theme: 'grassland', damage: 40, reward: 5, wave: [['Raptor', 'raptor-wild', 3, 0.95]] },
   { name: 'Riverbank Crossing', theme: 'river', damage: 250, reward: 25, wave: [], boss: ['Baryonyx', 'baryonyx', 2.0, 1.15] },
   { name: 'Baryonyx Swamp', theme: 'swamp', damage: 1 * K, reward: 100, wave: [['Baryonyx', 'baryonyx', 3, 1.7]] },
   {
@@ -286,7 +286,7 @@ const PLANS: readonly StagePlan[] = [
     boss: ['Golden Therizinosaurus', 'therizinosaurus-gold', 2.5, 1.4],
   },
   {
-    name: 'Abandoned Research Site',
+    name: 'Overgrown Ruins',
     theme: 'facility',
     damage: 37 * B,
     reward: 16 * M,
@@ -294,7 +294,7 @@ const PLANS: readonly StagePlan[] = [
     boss: ['Prototype Indoraptor', 'indoraptor-proto', 2.2, 1.35],
   },
   {
-    name: 'Overgrown Paddocks',
+    name: 'Vine Valley',
     theme: 'paddocks',
     damage: 90 * B,
     reward: 25 * M,
