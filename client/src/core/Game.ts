@@ -36,6 +36,7 @@ import {
 import { Vector3 } from 'three';
 import { AudioManager } from '../audio/AudioManager.js';
 import { PlayerAudio } from '../audio/PlayerAudio.js';
+import { attackVoiceOf } from '../audio/attackVoice.js';
 import { AvatarDresser } from '../bloxity/AvatarDresser.js';
 import { Bloxity } from '../bloxity/Bloxity.js';
 import { lookFromLegion } from '../bloxity/avatarLook.js';
@@ -123,6 +124,8 @@ interface PendingImpact {
   readonly kind: AttackKind;
   readonly variant: number;
   readonly size: number;
+  /** The attacker's species' attack voice, heard on the impact frame. */
+  readonly voice: ReturnType<typeof attackVoiceOf>;
 }
 
 const PLACES = [
@@ -212,8 +215,11 @@ export class Game {
       this.sceneManager.scene,
       (def) => this.audio.play('enemyDeath', def.boss ? 1.3 : 0.8, 0, def.boss ? 0.7 : Math.min(1.5, 1.9 / Math.max(0.6, def.scale))),
       () => this.audio.play('roar', 1.2, 0, 0.85),
-      // A wild dinosaur's bite on the rider: the same snap, deeper from bigger jaws.
-      (def) => this.audio.play('enemyBite', def.boss ? 1 : 0.8, 0, Math.min(1.5, Math.max(0.55, 1.9 / Math.max(0.8, def.scale * 1.4)))),
+      // A wild dinosaur's blow on the rider, in its own species' attack voice (a boss a touch deeper).
+      (def) => {
+        const voice = attackVoiceOf(def.look);
+        this.audio.attack(voice.kind, true, voice.pitch * (def.boss ? 0.88 : 1), def.boss ? 1 : 0.8);
+      },
     );
     this.celebration = new ClaimCelebration(this.sceneManager.scene);
     this.damage = new DamagePopups(container);
@@ -546,7 +552,7 @@ export class Game {
     const at =
       point ??
       new Vector3(p.x + Math.sin(facing) * dino.reach * 0.7, p.y + dino.height * 0.35, p.z + Math.cos(facing) * dino.reach * 0.7);
-    this.impactsDue.push({ time: IMPACT_SECONDS, from, at, kind: dino.attack, variant, size: dino.height / 4 });
+    this.impactsDue.push({ time: IMPACT_SECONDS, from, at, kind: dino.attack, variant, size: dino.height / 4, voice: attackVoiceOf(dino.look) });
     this.network.attack(target);
     if (isDummyTarget(target)) this.hub.strikeDummy(target - 1000, facing);
   }
@@ -559,8 +565,7 @@ export class Game {
       if (impact.time > 0) continue;
       this.impactsDue.splice(i, 1);
       this.impacts.hit(impact.from, impact.at, impact.kind, impact.variant, impact.size);
-      const pitch = Math.min(1.5, Math.max(0.55, 1.9 / Math.max(0.8, impact.size * 1.4)));
-      this.audio.play('bite', 1, 0, pitch);
+      this.audio.attack(impact.voice.kind, false, impact.voice.pitch);
     }
   }
 
@@ -585,7 +590,7 @@ export class Game {
       const yaw = remote.facing;
       const from = new Vector3(root.x, root.y + tier.height * 0.5, root.z);
       const at = new Vector3(root.x + Math.sin(yaw) * tier.reach * 0.7, root.y + tier.height * 0.35, root.z + Math.cos(yaw) * tier.reach * 0.7);
-      this.impactsDue.push({ time: IMPACT_SECONDS, from, at, kind: tier.attack, variant: remote.variant, size: tier.height / 5 });
+      this.impactsDue.push({ time: IMPACT_SECONDS, from, at, kind: tier.attack, variant: remote.variant, size: tier.height / 5, voice: attackVoiceOf(tier.look) });
     });
   }
 

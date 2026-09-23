@@ -2,6 +2,7 @@ import deathUrl from '../../../assets/audio/death.mp3?url';
 import dinoSoundUrl from '../../../assets/audio/dino-sound.mp3?url';
 import jumpUrl from '../../../assets/audio/jump.mp3?url';
 import musicUrl from '../../../assets/audio/jungle-background.mp3?url';
+import type { AttackKind } from '../dinos/DinoSpecies.js';
 import { logger } from '../util/logger.js';
 
 const SCOPE = 'audio';
@@ -30,8 +31,9 @@ const WALK_GAIN = 0.9;
  * The asset set for this game ships a jungle background track, a jump, a death
  * and a dinosaur sound. They are used as they are - a tune, a real impact and a
  * living roar are what an oscillator cannot fake - and the roar is also pitched
- * and cut to voice every bite, bellow and death cry, from a Compsognathus's
- * chirp to an Indominus's roar. Everything else below is still built from
+ * to voice every bellow and death cry, from a Compsognathus's chirp to an
+ * Indominus's roar. Everything else below - the seven attack voices included -
+ * is built from
  * oscillators and envelopes, which costs bytes measured in hundreds against a
  * 12 MB budget; a full pack of wavs is the easiest way to spend that budget on
  * nothing.
@@ -60,21 +62,32 @@ const SAMPLE_URLS: Partial<Record<SoundName, string>> = {
   // The dinosaur going down under its rider.
   death: deathUrl,
   jump: jumpUrl,
-  // The supplied dinosaur sound (`assets/audio/dino-sound.mp3`). Pitched per species:
-  // a Compsognathus shrieks with it, a Tyrannosaurus bellows. Its first short burst
-  // is also EVERY BITE, the rider's and the wild dinosaurs' (see BITE_SLICE).
+  // The supplied dinosaur sound (`assets/audio/dino-sound.mp3`): the evolution roar, a
+  // boss's challenge and every death bellow, pitched per species. NOT the attacks: those
+  // are each species' own attack voice (see `attack`), so a fight is not one sound on repeat.
   roar: dinoSoundUrl,
 };
 
 /**
- * THE BITE: the opening burst of `dino-sound.mp3` (it starts at ~0.1s and is
- * done by ~0.5s; a second burst follows after a gap). Played from just before
- * its onset so the crunch lands on the impact frame, faded out after the burst.
+ * THE ATTACK VOICES sit under the rest of the mix: a small, satisfying hit, not a
+ * roar. A wild dinosaur's lands a little quieter than the rider's own.
  */
-const BITE_SLICE = { offset: 0.07, length: 0.44 } as const;
-/** Bites sit under the rest of the mix: a small, satisfying snap, not a roar. */
-const BITE_GAIN = 0.42;
-const ENEMY_BITE_GAIN = 0.34;
+const ATTACK_GAIN = 0.75;
+const ENEMY_ATTACK_GAIN = 0.58;
+/**
+ * Per style, so every voice peaks in the same quiet band (about -26..-23 dBFS on
+ * the effects bus, measured) whatever it is made of: the thump-heavy ones - a
+ * stomp, a headbutt - would otherwise land ten decibels over a bite.
+ */
+const ATTACK_TRIM: Readonly<Record<AttackKind, number>> = {
+  bite: 0.6,
+  claws: 1,
+  kick: 0.53,
+  headbutt: 0.43,
+  horns: 0.54,
+  tail: 0.68,
+  stomp: 0.4,
+};
 
 /** Sampled sounds that may overlap themselves: two enemies falling together are two deaths. */
 const LAYERED: ReadonlySet<SoundName> = new Set<SoundName>(['enemyDeath']);
@@ -118,9 +131,9 @@ const COOLDOWNS: Readonly<Record<SoundName, number>> = {
 };
 
 export type SoundName =
-  /** An attack landing: a snap of jaws, a rake of claws, a horn's thump. */
+  /** The rider's attack landing, in its species' attack voice (see `attack`). */
   | 'bite'
-  /** A wild dinosaur's attack landing on the rider: the same bite, its own voice. */
+  /** A wild dinosaur's attack landing on the rider: its own channel, its own species' voice. */
   | 'enemyBite'
   /** The supplied roar: an evolution, a boss unsealed, a charge begun. */
   | 'roar'
@@ -534,16 +547,9 @@ export class AudioManager {
     const level = Math.min(Math.max(intensity, 0), 1);
     switch (name) {
       case 'bite':
-      case 'enemyBite': {
-        // The supplied sound's opening burst, pitched to the jaws: a new bite cuts the last of its kind.
-        const gain = (name === 'bite' ? BITE_GAIN : ENEMY_BITE_GAIN) * (0.6 + 0.4 * level);
-        if (this.playSample('roar', now, gain, pitch, BITE_SLICE.length / Math.max(0.3, pitch), name, BITE_SLICE.offset)) break;
-        // Without the file: a snap, a short bright crack over a low, meaty thump. Bigger jaws thump lower.
-        const low = 150 / Math.max(0.5, Math.sqrt(1 / Math.max(0.3, pitch)));
-        this.thud(now, 0.3 + level * 0.35, low);
-        this.noise(now, 0.07, 0.22 * level, 1800 * pitch);
+      case 'enemyBite':
+        this.attackVoice(this.pendingAttack, now, (name === 'bite' ? ATTACK_GAIN : ENEMY_ATTACK_GAIN) * (0.6 + 0.4 * level), pitch);
         break;
-      }
       case 'roar':
         if (this.playSample('roar', now, 0.7 * level, pitch)) break;
         this.blip(now, 'sawtooth', 180 * pitch, 60 * pitch, 0.7, 0.35);
@@ -954,6 +960,107 @@ export class AudioManager {
     osc.connect(envelope);
     envelope.connect(bus);
     this.hold(osc, envelope, at, 0.12);
+  }
+
+  /**
+   * AN ATTACK LANDING, in its species' own voice: called on the animation's
+   * impact frame. `enemy` is a wild dinosaur's blow on the rider (its own
+   * channel, a little quieter). The rider's and the wild dinosaurs' attacks each
+   * keep a cooldown and never stack past one of each at a time.
+   *
+   * @param pitch the species' voice (`Look.voice`): a Compsognathus near 1.6, a
+   *              Tyrannosaurus near 0.6 - small animals snap high, big ones thump low
+   */
+  attack(kind: AttackKind, enemy: boolean, pitch = 1, intensity = 1): void {
+    this.pendingAttack = kind;
+    this.play(enemy ? 'enemyBite' : 'bite', intensity, 0, pitch);
+    this.pendingAttack = 'bite';
+  }
+
+  /** The attack style the next `bite` / `enemyBite` voices (set by `attack`). */
+  private pendingAttack: AttackKind = 'bite';
+
+  /**
+   * THE SEVEN ATTACK VOICES, synthesised - one per attack style, so every
+   * species sounds like what it does:
+   *
+   *   bite      teeth meeting: a sharp double click over a meaty thump
+   *   claws     a rake: three quick falling swipes of bright noise
+   *   kick      a foot connecting: a slap and a solid body thump
+   *   headbutt  a skull cracking into something: a hollow knock and a low thud
+   *   horns     a gore: a sharp crack, a tearing rasp, a heavy thump
+   *   tail      a whip-crack: a rising whoosh snapping into a slap
+   *   stomp     a foot coming down: a deep boom and a rumble
+   *
+   * Pitch shifts the whole voice, so the same style still sounds different
+   * from species to species and from size to size.
+   */
+  private attackVoice(kind: AttackKind, at: number, gain: number, pitch: number): void {
+    const p = Math.min(1.7, Math.max(0.5, pitch));
+    gain *= ATTACK_TRIM[kind];
+    // Big animals hit harder at the bottom and softer at the top.
+    const body = gain * (0.85 + (1 - p) * 0.35);
+    switch (kind) {
+      case 'bite':
+        this.noise(at, 0.03, 0.3 * gain, 2800 * p);
+        this.noise(at + 0.045, 0.03, 0.22 * gain, 2000 * p);
+        this.thud(at, 0.42 * body, 140 * p);
+        break;
+      case 'claws':
+        for (let i = 0; i < 3; i += 1) this.sweep(at + i * 0.045, 0.07, (0.24 - i * 0.05) * gain, 5200 * p, 2200 * p, 2.2);
+        this.thud(at + 0.02, 0.2 * body, 170 * p);
+        break;
+      case 'kick':
+        this.noise(at, 0.045, 0.2 * gain, 1300 * p);
+        this.thud(at, 0.55 * body, 105 * p);
+        break;
+      case 'headbutt':
+        this.blip(at, 'triangle', 280 * p, 140 * p, 0.12, 0.2 * gain);
+        this.noise(at, 0.035, 0.14 * gain, 800 * p);
+        this.thud(at, 0.6 * body, 88 * p);
+        break;
+      case 'horns':
+        this.noise(at, 0.025, 0.28 * gain, 3400 * p);
+        this.sweep(at + 0.01, 0.14, 0.18 * gain, 900 * p, 420 * p, 1.4);
+        this.thud(at, 0.5 * body, 96 * p);
+        break;
+      case 'tail':
+        this.sweep(at, 0.07, 0.16 * gain, 1200 * p, 3600 * p, 2.5);
+        this.noise(at + 0.05, 0.05, 0.26 * gain, 1600 * p);
+        this.thud(at + 0.05, 0.36 * body, 135 * p);
+        break;
+      case 'stomp':
+        this.blip(at, 'sine', 72 * p, 38 * p, 0.34, 0.5 * body);
+        this.noise(at, 0.24, 0.18 * gain, 190 * p);
+        this.thud(at, 0.45 * body, 62 * p);
+        break;
+    }
+  }
+
+  /** A band-passed noise burst whose centre SWEEPS: a swipe, a whoosh, a rasp. */
+  private sweep(at: number, length: number, gain: number, from: number, to: number, q = 1.8): void {
+    const ctx = this.context;
+    const bus = this.sfxBus;
+    if (!ctx || !bus) return;
+    const frames = Math.max(1, Math.floor(ctx.sampleRate * length));
+    const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < frames; i += 1) data[i] = Math.random() * 2 - 1;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.Q.value = q;
+    filter.frequency.setValueAtTime(Math.max(40, from), at);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(40, to), at + length);
+    const envelope = ctx.createGain();
+    envelope.gain.setValueAtTime(0.0001, at);
+    envelope.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), at + length * 0.35);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, at + length);
+    source.connect(filter);
+    filter.connect(envelope);
+    envelope.connect(bus);
+    this.hold(source, envelope, at, length);
   }
 
   private arpeggio(
