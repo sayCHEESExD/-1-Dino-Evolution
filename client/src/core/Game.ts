@@ -212,6 +212,8 @@ export class Game {
       this.sceneManager.scene,
       (def) => this.audio.play('enemyDeath', def.boss ? 1.3 : 0.8, 0, def.boss ? 0.7 : Math.min(1.5, 1.9 / Math.max(0.6, def.scale))),
       () => this.audio.play('roar', 1.2, 0, 0.85),
+      // A wild dinosaur's bite on the rider: the same snap, deeper from bigger jaws.
+      (def) => this.audio.play('enemyBite', def.boss ? 1 : 0.8, 0, Math.min(1.5, Math.max(0.55, 1.9 / Math.max(0.8, def.scale * 1.4)))),
     );
     this.celebration = new ClaimCelebration(this.sceneManager.scene);
     this.damage = new DamagePopups(container);

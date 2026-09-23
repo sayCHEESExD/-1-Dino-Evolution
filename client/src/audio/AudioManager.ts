@@ -61,10 +61,21 @@ const SAMPLE_URLS: Partial<Record<SoundName, string>> = {
   death: '/audio/death.mp3',
   // The supplied jump.
   jump: '/audio/jump.mp3',
-  // The supplied roar (a space in the supplied name, percent-encoded). Pitched per
-  // species: a Compsognathus shrieks with it, a Tyrannosaurus bellows.
+  // The supplied dinosaur sound (a space in the supplied name, percent-encoded).
+  // Pitched per species: a Compsognathus shrieks with it, a Tyrannosaurus bellows.
+  // Its first short burst is also every BITE (see BITE_SLICE).
   roar: '/audio/dino%20sound.mp3',
 };
+
+/**
+ * THE BITE: the opening burst of `dino sound.mp3` (it starts at ~0.1s and is
+ * done by ~0.5s; a second burst follows after a gap). Played from just before
+ * its onset so the crunch lands on the impact frame, faded out after the burst.
+ */
+const BITE_SLICE = { offset: 0.07, length: 0.44 } as const;
+/** Bites sit under the rest of the mix: a small, satisfying snap, not a roar. */
+const BITE_GAIN = 0.42;
+const ENEMY_BITE_GAIN = 0.34;
 
 /** Sampled sounds that may overlap themselves: two enemies falling together are two deaths. */
 const LAYERED: ReadonlySet<SoundName> = new Set<SoundName>(['enemyDeath']);
@@ -88,6 +99,8 @@ const clamp01 = (value: number): number =>
 const COOLDOWNS: Readonly<Record<SoundName, number>> = {
   // Under the attack interval, so every real attack sounds and a spammed click cannot double one.
   bite: 0.22,
+  // A wave biting together is one snap at a time, not a stack.
+  enemyBite: 0.18,
   roar: 1.2,
   enemyDeath: 0.25,
   hurt: 0.25,
@@ -108,6 +121,8 @@ const COOLDOWNS: Readonly<Record<SoundName, number>> = {
 export type SoundName =
   /** An attack landing: a snap of jaws, a rake of claws, a horn's thump. */
   | 'bite'
+  /** A wild dinosaur's attack landing on the rider: the same bite, its own voice. */
+  | 'enemyBite'
   /** The supplied roar: an evolution, a boss unsealed, a charge begun. */
   | 'roar'
   /** One wild dinosaur downed: the roar, deep and short. */
@@ -504,8 +519,12 @@ export class AudioManager {
 
     const level = Math.min(Math.max(intensity, 0), 1);
     switch (name) {
-      case 'bite': {
-        // A snap: a short bright crack over a low, meaty thump. Bigger jaws thump lower.
+      case 'bite':
+      case 'enemyBite': {
+        // The supplied sound's opening burst, pitched to the jaws: a new bite cuts the last of its kind.
+        const gain = (name === 'bite' ? BITE_GAIN : ENEMY_BITE_GAIN) * (0.6 + 0.4 * level);
+        if (this.playSample('roar', now, gain, pitch, BITE_SLICE.length / Math.max(0.3, pitch), name, BITE_SLICE.offset)) break;
+        // Without the file: a snap, a short bright crack over a low, meaty thump. Bigger jaws thump lower.
         const low = 150 / Math.max(0.5, Math.sqrt(1 / Math.max(0.3, pitch)));
         this.thud(now, 0.3 + level * 0.35, low);
         this.noise(now, 0.07, 0.22 * level, 1800 * pitch);
@@ -687,7 +706,7 @@ export class AudioManager {
    * its own cooldown; a recorded file need not be, so without this two of them
    * could overlap.
    */
-  private playSample(sample: SoundName, when: number, gain: number, rate = 1, length = 0, voice: SoundName = sample): boolean {
+  private playSample(sample: SoundName, when: number, gain: number, rate = 1, length = 0, voice: SoundName = sample, offset = 0): boolean {
     const ctx = this.context;
     const bus = this.sfxBus;
     const buffer = this.samples.get(sample);
@@ -710,7 +729,7 @@ export class AudioManager {
       this.voices = Math.max(0, this.voices - 1);
       if (this.activeSamples.get(name) === source) this.activeSamples.delete(name);
     };
-    source.start(when);
+    source.start(when, offset);
     if (length > 0) {
       // Cut short with a fade, so a clipped roar does not click.
       envelope.gain.setValueAtTime(gain, when + length * 0.7);

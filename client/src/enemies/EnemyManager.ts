@@ -11,7 +11,7 @@ import {
   type MeshStandardMaterial,
   type Scene,
 } from 'three';
-import { ATTACK_SECONDS, DinoAnimator, createMotion, type DinoMotion } from '../dinos/DinoAnimator.js';
+import { ATTACK_IMPACT, ATTACK_SECONDS, DinoAnimator, createMotion, type DinoMotion } from '../dinos/DinoAnimator.js';
 import { createDino, ownMaterial, type DinoInstance } from '../dinos/DinoModel.js';
 import type { NetEnemyState } from '../net/netTypes.js';
 import { worldTextures } from '../world/WorldTextures.js';
@@ -58,6 +58,10 @@ class EnemyVisual {
   private wasSealed = false;
   /** Set on the frame a sealed boss's ward falls: the game roars. */
   unsealed = false;
+  /** An attack is under way and its jaws have not closed yet. */
+  private bitePending = false;
+  /** The jaws closed this frame: the manager plays the bite. */
+  bit = false;
 
   constructor(readonly def: EnemyDef) {
     this.dino = createDino(def.look, def.boss ? 'high' : 'medium');
@@ -104,6 +108,8 @@ class EnemyVisual {
     this.lastHits = -1;
     this.lastSwings = -1;
     this.motion.attackTime = -1;
+    this.bitePending = false;
+    this.bit = false;
   }
 
   /** Show a replicated state. Returns true on the one frame this dinosaur is seen to fall. */
@@ -122,6 +128,7 @@ class EnemyVisual {
     if (this.lastSwings >= 0 && state.swings !== this.lastSwings) {
       this.motion.attackTime = 0;
       this.swingVariant += 1;
+      this.bitePending = true;
     }
     this.lastSwings = state.swings;
     if (this.alive && !state.alive) this.deathTime = 0;
@@ -174,6 +181,11 @@ class EnemyVisual {
     m.grounded = true;
     if (m.attackTime >= 0) {
       m.attackTime += dt;
+      // The jaws close: the bite is heard now, on the animation's impact frame.
+      if (this.bitePending && m.attackTime >= ATTACK_SECONDS * ATTACK_IMPACT * 1.5) {
+        this.bitePending = false;
+        if (this.deathTime < 0) this.bit = true;
+      }
       if (m.attackTime >= ATTACK_SECONDS * 1.5) m.attackTime = -1;
     }
     m.attackVariant = this.swingVariant;
@@ -229,11 +241,13 @@ export class EnemyManager {
   /**
    * @param onDeath  once per dinosaur downed in the local run (the bellow)
    * @param onUnseal once per boss whose ward falls (the challenge roar)
+   * @param onBite   each time a dinosaur's attack on the rider lands (its impact frame)
    */
   constructor(
     private readonly scene: Scene,
     private readonly onDeath: (def: EnemyDef) => void = () => undefined,
     private readonly onUnseal: (def: EnemyDef) => void = () => undefined,
+    private readonly onBite: (def: EnemyDef) => void = () => undefined,
   ) {}
 
   /** How many dinosaurs are alive right now in a stage, from replicated state. */
@@ -272,6 +286,10 @@ export class EnemyManager {
         this.onUnseal(visual.def);
       }
       visual.update(dt);
+      if (visual.bit) {
+        visual.bit = false;
+        this.onBite(visual.def);
+      }
     }
   }
 
