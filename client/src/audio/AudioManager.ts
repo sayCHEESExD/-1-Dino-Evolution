@@ -196,6 +196,20 @@ export class AudioManager {
    */
   private musicElement: HTMLAudioElement | null = null;
   private musicSource: MediaElementAudioSourceNode | null = null;
+  /**
+   * The track, downloaded ONCE into memory (still compressed, ~3 MB) and
+   * played from an object URL. A streamed element keeps a network request open
+   * for the whole session and re-requests the file at every loop point; one
+   * dropped request errors the element, and an errored element never plays
+   * again - which is how the music used to vanish partway through a session.
+   */
+  private musicBlobUrl: string | null = null;
+  private musicFetch: Promise<void> | null = null;
+  /** The music watchdog's timer, and when the track last visibly advanced. */
+  private musicTimer: number | null = null;
+  private musicLastTime = -1;
+  private musicStuckSince = 0;
+  private musicRebuiltAt = -Infinity;
 
   /**
    * Decoded one-shot samples, by name.
@@ -250,6 +264,12 @@ export class AudioManager {
   /** The portal's master and music sliders, 0..1. Both default to full. */
   private masterLevel = 1;
   private musicLevel = 1;
+
+  constructor() {
+    // The track downloads while the game loads (no gesture needed to fetch), so it is
+    // usually already in memory by the first click that starts the audio.
+    this.fetchMusic();
+  }
 
   /**
    * Bring the audio up, on a real user gesture.
@@ -329,11 +349,8 @@ export class AudioManager {
       logger.info(SCOPE, 'audio started');
     }
 
-    // A tab that was backgrounded pauses the element; resuming has to restart
-    // it, and `play()` on an already-playing element is a no-op.
-    if (this.musicElement && !this.muted) {
-      void this.musicElement.play().catch(() => undefined);
-    }
+    // Every gesture is also a chance to bring the music back if anything stopped it.
+    this.ensureMusic();
   }
 
   get isMuted(): boolean {
@@ -384,10 +401,8 @@ export class AudioManager {
     // A muted stream is PAUSED, not merely silenced. Leaving it running would
     // keep decoding a file nobody can hear, and on a phone that is battery
     // spent on nothing.
-    const element = this.musicElement;
-    if (!element) return;
-    if (this.muted) element.pause();
-    else void element.play().catch(() => undefined);
+    if (this.muted) this.musicElement?.pause();
+    else this.ensureMusic();
   }
 
   toggleMuted(): boolean {
@@ -601,16 +616,11 @@ export class AudioManager {
   }
 
   dispose(): void {
-    if (this.musicElement) {
-      this.musicElement.pause();
-      // Dropping the src releases the network request and the decoder; an
-      // element left holding a stream keeps both alive after the game is gone.
-      this.musicElement.removeAttribute('src');
-      this.musicElement.load();
-    }
-    this.musicSource?.disconnect();
-    this.musicSource = null;
-    this.musicElement = null;
+    this.stopMusicWatch();
+    this.teardownMusic();
+    if (this.musicBlobUrl) URL.revokeObjectURL(this.musicBlobUrl);
+    this.musicBlobUrl = null;
+    this.musicFetch = null;
     this.samples.clear();
     this.activeSamples.clear();
     this.samplesRequested = false;
@@ -628,36 +638,172 @@ export class AudioManager {
   // -------------------------------------------------------------- the music
 
   /**
-   * Start the background track.
-   *
-   * Called exactly once, from behind the `started` flag, which is what makes a
-   * doubled tune impossible rather than merely unlikely. A failure here is
-   * SILENT on purpose: a blocked or missing track is a game without music, not
+   * Start the background track: ONCE per session, from behind the `started`
+   * flag, and from then on the watchdog keeps it playing. A failure here is
+   * silent on purpose: a blocked or missing track is a game without music, not
    * a game that stops.
    */
   private startMusic(): void {
+    this.fetchMusic();
+    this.buildMusic(0);
+    this.startMusicWatch();
+  }
+
+  /** Download the track into memory once; later (re)builds play from it. */
+  private fetchMusic(): void {
+    if (this.musicFetch) return;
+    this.musicFetch = fetch(MUSIC_URL)
+      .then((response) => (response.ok ? response.blob() : null))
+      .then((blob) => {
+        if (!blob || this.musicBlobUrl) return;
+        this.musicBlobUrl = URL.createObjectURL(blob);
+        // Still streaming from the network? Move over to memory at the same spot.
+        if (this.musicElement && this.musicElement.src !== this.musicBlobUrl) this.rebuildMusic('now in memory', true);
+      })
+      .catch(() => {
+        // The stream stays in use, and the next rebuild tries the download again.
+        this.musicFetch = null;
+      });
+  }
+
+  /**
+   * THE ONE MUSIC ELEMENT, built and wired to the music bus. There is never
+   * more than one: whatever was there before is torn down first.
+   */
+  private buildMusic(at: number): void {
     const ctx = this.context;
     const bus = this.musicBus;
-    if (!ctx || !bus || this.musicElement) return;
+    if (!ctx || !bus) return;
+    this.teardownMusic();
 
-    const element = new Audio(MUSIC_URL);
+    const element = new Audio(this.musicBlobUrl ?? MUSIC_URL);
     element.loop = true;
     // Same-origin, but stated anyway: without it the element is tainted and
     // `createMediaElementSource` produces silence rather than an error.
     element.crossOrigin = 'anonymous';
     element.preload = 'auto';
-    this.musicElement = element;
+    if (at > 0) {
+      const seek = (): void => {
+        if (Number.isFinite(element.duration) && element.duration > 0) element.currentTime = at % element.duration;
+      };
+      element.addEventListener('loadedmetadata', seek, { once: true });
+    }
+    // Anything that stops the track without being asked to sends it straight to the watchdog.
+    element.addEventListener('pause', this.onMusicInterrupted);
+    element.addEventListener('ended', this.onMusicInterrupted);
+    element.addEventListener('error', this.onMusicInterrupted);
 
     try {
       this.musicSource = ctx.createMediaElementSource(element);
       this.musicSource.connect(bus);
     } catch (error) {
       logger.warn(SCOPE, `music not routed: ${String(error)}`);
-      this.musicElement = null;
       return;
     }
-
+    this.musicElement = element;
+    this.musicLastTime = -1;
+    this.musicStuckSince = 0;
     if (!this.muted) void element.play().catch(() => undefined);
+  }
+
+  /** Stop and release the music element, so a replacement never plays over it. */
+  private teardownMusic(): void {
+    const element = this.musicElement;
+    this.musicElement = null;
+    if (element) {
+      element.removeEventListener('pause', this.onMusicInterrupted);
+      element.removeEventListener('ended', this.onMusicInterrupted);
+      element.removeEventListener('error', this.onMusicInterrupted);
+      element.pause();
+      // Dropping the src releases the request and the decoder.
+      element.removeAttribute('src');
+      element.load();
+    }
+    this.musicSource?.disconnect();
+    this.musicSource = null;
+  }
+
+  /** Rebuild the element where the track had got to (rate-limited, so a broken file cannot spin). */
+  private rebuildMusic(reason: string, force = false): void {
+    const now = performance.now();
+    if (!force && now - this.musicRebuiltAt < 5000) return;
+    this.musicRebuiltAt = now;
+    // Where the track had got to: an errored element may have reset its clock, so fall
+    // back to the last position the watchdog saw it playing.
+    const current = this.musicElement?.currentTime ?? 0;
+    const at = current > 0 ? current : Math.max(0, this.musicLastTime);
+    logger.info(SCOPE, `music rebuilt (${reason})`);
+    // A failed download is retried; the new element streams meanwhile.
+    this.fetchMusic();
+    this.buildMusic(Number.isFinite(at) ? at : 0);
+  }
+
+  /** Music is wanted whenever audio has started and the game is not muted. */
+  private get musicWanted(): boolean {
+    return this.started && !this.muted && !!this.context && !!this.musicBus;
+  }
+
+  /**
+   * THE MUSIC WATCHDOG. Called every couple of seconds, on every gesture, when
+   * the tab comes back into view, and whenever the element stops on its own:
+   * if music is wanted and is not playing, it resumes the context, replays the
+   * element, or rebuilds it if it has errored, ended or stalled.
+   */
+  private ensureMusic(): void {
+    if (!this.musicWanted) return;
+    const ctx = this.context!;
+    // Suspended by the browser (a background tab, an output device change): bring it back
+    // - permitted once the page has had a gesture, and every gesture retries anyway.
+    if (ctx.state !== 'running') void ctx.resume().catch(() => undefined);
+
+    const element = this.musicElement;
+    if (!element || element.error || element.ended) {
+      this.rebuildMusic(element ? (element.error ? `error ${element.error.code}` : 'ended') : 'missing');
+      return;
+    }
+    if (element.paused) {
+      void element.play().catch(() => undefined);
+      return;
+    }
+    // Playing, but has it actually moved? A stream can hang with no error at all.
+    const time = element.currentTime;
+    const now = performance.now();
+    if (time !== this.musicLastTime) {
+      this.musicLastTime = time;
+      this.musicStuckSince = now;
+    } else if (ctx.state === 'running' && now - this.musicStuckSince > (this.musicBlobUrl ? 8000 : 20000)) {
+      // From memory it cannot be waiting on the network, so 8s still is broken; a
+      // stream still downloading on a slow line is given longer before it is replaced.
+      this.rebuildMusic('stalled');
+    }
+  }
+
+  /** The element stopped without being asked: look again a moment later (a mute pauses it on purpose). */
+  private readonly onMusicInterrupted = (): void => {
+    if (!this.musicWanted) return;
+    window.setTimeout(() => this.ensureMusic(), 250);
+  };
+
+  private readonly onVisible = (): void => {
+    if (document.visibilityState === 'visible') this.ensureMusic();
+  };
+
+  private startMusicWatch(): void {
+    if (this.musicTimer !== null) return;
+    this.musicTimer = window.setInterval(() => this.ensureMusic(), 2000);
+    document.addEventListener('visibilitychange', this.onVisible);
+    window.addEventListener('focus', this.onVisible);
+    window.addEventListener('pageshow', this.onVisible);
+    this.context?.addEventListener('statechange', this.onVisible);
+  }
+
+  private stopMusicWatch(): void {
+    if (this.musicTimer !== null) window.clearInterval(this.musicTimer);
+    this.musicTimer = null;
+    document.removeEventListener('visibilitychange', this.onVisible);
+    window.removeEventListener('focus', this.onVisible);
+    window.removeEventListener('pageshow', this.onVisible);
+    this.context?.removeEventListener('statechange', this.onVisible);
   }
 
   // --------------------------------------------------------- the one-shots
